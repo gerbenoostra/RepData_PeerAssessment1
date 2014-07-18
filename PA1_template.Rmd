@@ -1,20 +1,75 @@
 # Reproducible Research: Peer Assessment 1
 
-
 ## Loading and preprocessing the data
-
+Let's get the data from the zip, and transform the date strings to a Date class.
+```{r}
+data <- read.csv(unz("activity.zip", "activity.csv"), stringsAsFactors=F)
+data$date <- as.Date(data$date,"%Y-%m-%d")
+str(data)
+```
 
 
 ## What is mean total number of steps taken per day?
 
+```{r}
+step_measures_per_day <- split(data$steps, data$date)
+total_number_of_steps_per_day <- sapply(step_measures_per_day, sum, na.rm=T)
+hist(total_number_of_steps_per_day)
+mean(total_number_of_steps_per_day)
+median(total_number_of_steps_per_day)
+```
+The mean total number of steps taken per day is `r mean(total_number_of_steps_per_day)`  
+The median total number of steps taken per day is `r median(total_number_of_steps_per_day)`
 
 
 ## What is the average daily activity pattern?
+```{r}
+step_sums <- sapply(split(data$steps, data$interval), mean, na.rm=T)
+plot(y=step_sums, x=as.numeric(names(step_sums)), type="l", ylab="avg steps p day", xlab="interval")
+```
 
-
+The maximum number (`r max(step_sums)`) of steps per 5 minutes (averaged across all days) occurs at interval `r names(step_sums)[order(step_sums, decreasing=T)[1]]`.
 
 ## Imputing missing values
+The data contains `r sum(is.na(data$steps))` missing values (`r 100*sum(is.na(data$steps))/nrow(data)`%).
 
+Instead of ignoring those number of steps, we fill them with the median number of steps for that given interval, across all days.
+```{r}
+data_filled <- data
+na_steps <- is.na(data_filled$steps)
+data_filled$steps[which(na_steps)] <- sapply(which(na_steps), 
+                                             function(i){
+                                               median(
+                                                 data_filled$steps[data_filled$interval==data_filled$interval[i]],
+                                                 na.rm=T)
+                                               }
+                                             )
+```
 
+Now we can recalculate the number of steps taken per day:
+```{r}
+steps_per_day <- sapply(split(data_filled$steps, data_filled$date), sum, na.rm=T)
+hist(steps_per_day)
+mean(steps_per_day)
+median(steps_per_day)
+```
+The new mean total number of steps taken per day is `r mean(steps_per_day)`  
+The new median total number of steps taken per day is `r median(steps_per_day)`
+
+The median steps per day has not changed, as we used exactly that value as replacement for `NA` values.  
+The average increased a little bit (`r mean(steps_per_day)-mean(total_number_of_steps_per_day)`)
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r} 
+wdays <- unclass(as.POSIXlt(data_filled$date))$wday
+data_filled <- cbind(data_filled, weekday=(wdays==0|wdays==6))
+data_filled <- cbind(data_filled, weekend=!data_filled$weekday)
+weekend_sums <- sapply(split(data_filled$steps[data_filled$weekend], data_filled$interval[data_filled$weekend]), mean, na.rm=T)
+week_sums <- sapply(split(data_filled$steps[data_filled$weekday], data_filled$interval[data_filled$weekday]), mean, na.rm=T)
+par(mfrow=c(2,1))
+ylim=c(min(c(weekend_sums,week_sums)), max(c(weekend_sums,week_sums)))
+plot(y=weekend_sums, x=as.numeric(names(weekend_sums)), type="l", main="weekend", xlab="interval", ylab="avg steps p day", ylim=ylim)
+plot(y=week_sums, x=as.numeric(names(week_sums)), type="l", main="weekday", xlab="interval", ylab="avg steps p day",ylim=ylim)
+```
+
+These two plot show that the weekends have more activity in the morning, while the weekdays have more consistent activity during the whole day.
